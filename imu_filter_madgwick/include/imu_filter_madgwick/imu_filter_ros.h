@@ -64,7 +64,7 @@ class ImuFilterRos
 
     ros::NodeHandle nh_;
     ros::NodeHandle nh_private_;
-    
+
     boost::shared_ptr<Synchronizer> sync_;
     boost::shared_ptr<ImuSubscriber> imu_subscriber_;
     boost::shared_ptr<MagSubscriber> mag_subscriber_;
@@ -79,7 +79,7 @@ class ImuFilterRos
     tf2_ros::TransformBroadcaster tf_broadcaster_;
 
     boost::shared_ptr<FilterConfigServer> config_server_;
-    
+
     // **** paramaters
     bool use_mag_;
     bool use_magnetic_field_msg_;
@@ -119,8 +119,6 @@ class ImuFilterRos
     void computeRPY(float ax, float ay, float az,
                     float mx, float my, float mz,
                     float& roll, float& pitch, float& yaw);
-
-
 };
 
 #endif // IMU_FILTER_IMU_MADWICK_FILTER_ROS_H

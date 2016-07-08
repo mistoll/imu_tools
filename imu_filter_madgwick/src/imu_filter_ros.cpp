@@ -28,9 +28,8 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 
 ImuFilterRos::ImuFilterRos(ros::NodeHandle nh, ros::NodeHandle nh_private):
-  nh_(nh), 
+  nh_(nh),
   nh_private_(nh_private),
-
   initialized_(false)
 {
   ROS_INFO ("Starting ImuFilter");
@@ -53,8 +52,11 @@ ImuFilterRos::ImuFilterRos(ros::NodeHandle nh, ros::NodeHandle nh_private):
   // For ROS Jade, make this default to true.
   if (!nh_private_.getParam ("use_magnetic_field_msg", use_magnetic_field_msg_))
   {
-      ROS_WARN("Deprecation Warning: The parameter use_magnetic_field_msg was not set, default is 'false'.");
-      ROS_WARN("Starting with ROS Jade, use_magnetic_field_msg will default to 'true'!");
+      if (use_mag_)
+      {
+          ROS_WARN("Deprecation Warning: The parameter use_magnetic_field_msg was not set, default is 'false'.");
+          ROS_WARN("Starting with ROS Jade, use_magnetic_field_msg will default to 'true'!");
+      }
       use_magnetic_field_msg_ = false;
   }
 
@@ -64,7 +66,7 @@ ImuFilterRos::ImuFilterRos(ros::NodeHandle nh, ros::NodeHandle nh_private):
     ROS_FATAL("constant_dt parameter is %f, must be >= 0.0. Setting to 0.0", constant_dt_);
     constant_dt_ = 0.0;
   }
-  
+
   // if constant_dt_ is 0.0 (default), use IMU timestamp to determine dt
   // otherwise, it will be constant
   if (constant_dt_ == 0.0)
@@ -76,7 +78,7 @@ ImuFilterRos::ImuFilterRos(ros::NodeHandle nh, ros::NodeHandle nh_private):
   config_server_.reset(new FilterConfigServer(nh_private_));
   FilterConfigServer::CallbackType f = boost::bind(&ImuFilterRos::reconfigCallback, this, _1, _2);
   config_server_->setCallback(f);
-  
+
   // **** register publishers
   imu_publisher_ = nh_.advertise<sensor_msgs::Imu>(
     ros::names::resolve("imu") + "/data", 5);
@@ -138,24 +140,24 @@ void ImuFilterRos::imuCallback(const ImuMsg::ConstPtr& imu_msg_raw)
   boost::mutex::scoped_lock(mutex_);
 
   const geometry_msgs::Vector3& ang_vel = imu_msg_raw->angular_velocity;
-  const geometry_msgs::Vector3& lin_acc = imu_msg_raw->linear_acceleration; 
-  
+  const geometry_msgs::Vector3& lin_acc = imu_msg_raw->linear_acceleration;
+
   ros::Time time = imu_msg_raw->header.stamp;
   imu_frame_ = imu_msg_raw->header.frame_id;
 
   if (!initialized_)
   {
-    // initialize roll/pitch orientation from acc. vector    
+    // initialize roll/pitch orientation from acc. vector
     double sign = copysignf(1.0, lin_acc.z);
     double roll = atan2(lin_acc.y, sign * sqrt(lin_acc.x*lin_acc.x + lin_acc.z*lin_acc.z));
     double pitch = -atan2(lin_acc.x, sqrt(lin_acc.y*lin_acc.y + lin_acc.z*lin_acc.z));
     double yaw = 0.0;
-                        
+
     tf2::Quaternion init_q;
     init_q.setRPY(roll, pitch, yaw);
-    
+
     filter_.setOrientation(init_q.getW(), init_q.getX(), init_q.getY(), init_q.getZ());
-    
+
     // initialize time
     last_time_ = time;
     initialized_ = true;
@@ -169,7 +171,7 @@ void ImuFilterRos::imuCallback(const ImuMsg::ConstPtr& imu_msg_raw)
     dt = (time - last_time_).toSec();
 
   last_time_ = time;
-  
+
   filter_.madgwickAHRSupdateIMU(
     ang_vel.x, ang_vel.y, ang_vel.z,
     lin_acc.x, lin_acc.y, lin_acc.z,
@@ -185,7 +187,7 @@ void ImuFilterRos::imuMagCallback(
   const MagMsg::ConstPtr& mag_msg)
 {
   boost::mutex::scoped_lock(mutex_);
-  
+
   const geometry_msgs::Vector3& ang_vel = imu_msg_raw->angular_velocity;
   const geometry_msgs::Vector3& lin_acc = imu_msg_raw->linear_acceleration;
   const geometry_msgs::Vector3& mag_fld = mag_msg->magnetic_field;
@@ -217,9 +219,9 @@ void ImuFilterRos::imuMagCallback(
 
     tf2::Quaternion init_q;
     init_q.setRPY(roll, pitch, yaw);
-    
+
     filter_.setOrientation(init_q.getW(), init_q.getX(), init_q.getY(), init_q.getZ());
-    
+
     last_time_ = time;
     initialized_ = true;
   }
@@ -230,7 +232,7 @@ void ImuFilterRos::imuMagCallback(
     dt = constant_dt_;
   else
     dt = (time - last_time_).toSec();
-  
+
   last_time_ = time;
 
   filter_.madgwickAHRSupdate(
@@ -286,8 +288,8 @@ void ImuFilterRos::publishFilteredMsg(const ImuMsg::ConstPtr& imu_msg_raw)
   double q0,q1,q2,q3;
   filter_.getOrientation(q0,q1,q2,q3);
 
-  // create and publish fitlered IMU message
-  boost::shared_ptr<ImuMsg> imu_msg = 
+  // create and publish filtered IMU message
+  boost::shared_ptr<ImuMsg> imu_msg =
     boost::make_shared<ImuMsg>(*imu_msg_raw);
 
   imu_msg->orientation.w = q0;
